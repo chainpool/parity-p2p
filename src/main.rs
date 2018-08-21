@@ -52,7 +52,7 @@ impl Specialization<Block> for Protocol {
   }
 }
 
-//pub type NetworkService = substrate_network::Service<Block, Protocol>;
+pub type NetworkService = substrate_network::Service<Block, Protocol, Hash>;
 
 fn main() {
     println!("Hello, world!");
