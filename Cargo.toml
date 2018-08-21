@@ -1,0 +1,19 @@
+[package]
+name = "p2p"
+version = "0.1.0"
+authors = ["gguoss <guanghuaguo.oss@gmail.com>"]
+
+[dependencies]
+substrate-network = { git = "https://github.com/paritytech/substrate" }
+substrate-runtime-primitives = { git = "https://github.com/paritytech/substrate" }
+substrate-primitives = { git = "https://github.com/paritytech/substrate" }
+substrate-codec = { git = "https://github.com/paritytech/substrate", default_features = false }
+substrate-codec-derive = { git = "https://github.com/paritytech/substrate", default_features = false }
+serde = { version = "1.0", default_features = false }
+serde_derive = { version = "1.0", optional = true }
+exchange-primitives = {path = "./primitives"}
+
+[workspace]
+members = [
+    "primitives",
+]
