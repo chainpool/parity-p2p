@@ -8,6 +8,9 @@ extern crate exchange_executor;
 extern crate exchange_runtime;
 extern crate substrate_client_db as client_db;
 extern crate substrate_state_db as state_db;
+extern crate futures;
+extern crate tokio;
+extern crate ctrlc;
 
 #[macro_use]
 extern crate hex_literal;
@@ -22,6 +25,8 @@ use exchange_runtime::{GenesisConfig,
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::collections::HashMap;
+use futures::{Future, Sink, Stream};
+use tokio::runtime::Runtime;
 
 pub struct Protocol {
   version: u64,
@@ -55,7 +60,7 @@ impl Specialization<Block> for Protocol {
   }
 
   fn on_abort(&mut self) {
-     unreachable!();
+     println!("on_abort!");
   }
 
   fn maintain_peers(&mut self, _ctx: &mut Context<Block>) {
@@ -177,4 +182,12 @@ fn main() {
     };
     NetworkService::new(param, DOT_PROTOCOL_ID);
     println!("Hello, world!");
+
+    let mut runtime = Runtime::new().unwrap();
+    let (exit_send, exit) = futures::sync::mpsc::channel(1);
+    ctrlc::CtrlC::set_handler(move || {
+      exit_send.clone().send(()).wait().expect("Error sending exit notification");
+    });
+
+    runtime.block_on(exit.into_future()).expect("Error running informant event loop");
 }

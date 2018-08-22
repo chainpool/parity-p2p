@@ -19,6 +19,9 @@ exchange-primitives = {path = "./primitives"}
 exchange-runtime = {path = "./runtime"}
 exchange-executor = {path = "./executor"}
 hex-literal = "0.1"
+ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
+futures = "0.1.17"
+tokio = "0.1.7"
 
 [workspace]
 members = [
