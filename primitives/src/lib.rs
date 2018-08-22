@@ -47,7 +47,7 @@ use runtime_primitives::traits::BlakeTwo256;
 use runtime_primitives::generic;
 
 /// Block header type as expected by this runtime.
-pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 
 /// Opaque, encoded, unchecked extrinsic.
 pub type UncheckedExtrinsic = Vec<u8>;
@@ -65,7 +65,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type BlockNumber = u64;
 
 /// Alias to Ed25519 pubkey that identifies an account on the relay chain.
-pub type AccountId = primitives::hash::H256;
+pub type AccountId = primitives::H256;
 
 /// The type for looking up accounts. We don't expect more than 4 billion of them, but you
 /// never know...
@@ -104,7 +104,9 @@ pub type Balance = u128;
 // TODO: parameterize blockid only as necessary.
 pub type BlockId = generic::BlockId<Block>;
 
+/*
 /// A log entry in the block.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+*/
