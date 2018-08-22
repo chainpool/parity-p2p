@@ -175,5 +175,6 @@ fn main() {
        transaction_pool: Arc::new(TransactionPool::new()),
        specialization: Protocol::new(),
     };
+    NetworkService::new(param, DOT_PROTOCOL_ID);
     println!("Hello, world!");
 }
