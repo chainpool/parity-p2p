@@ -5,6 +5,7 @@ authors = ["gguoss <guanghuaguo.oss@gmail.com>"]
 
 [dependencies]
 substrate-network = { git = "https://github.com/paritytech/substrate" }
+substrate-network-libp2p = { git = "https://github.com/paritytech/substrate" }
 substrate-runtime-primitives = { git = "https://github.com/paritytech/substrate" }
 substrate-primitives = { git = "https://github.com/paritytech/substrate" }
 substrate-codec = { git = "https://github.com/paritytech/substrate", default_features = false }
@@ -16,4 +17,7 @@ exchange-primitives = {path = "./primitives"}
 [workspace]
 members = [
     "primitives",
+    "runtime",
+    "executor",
+#    "runtime/wasm",
 ]

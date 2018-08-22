@@ -1,5 +1,7 @@
 extern crate substrate_network;
+extern crate substrate_libp2p_network;
 extern crate substrate_runtime_primitives;
+extern crate substrate_client as client;
 extern crate exchange_primitives;
 
 
@@ -54,6 +56,15 @@ impl Specialization<Block> for Protocol {
 
 pub type NetworkService = substrate_network::Service<Block, Protocol, Hash>;
 
+pub type NetworkParam = substrate_network::Params<Block, Protocol, Hash>;
+
+const DOT_PROTOCOL_ID: substrate_network::ProtocolId = *b"exc";
+
 fn main() {
+    let param = NetworkParam {
+       config: substrate_network::ProtocolConfig::default(),
+       network_config: substrate_network_libp2p::NetworkConfiguration::default(),
+       
+    };
     println!("Hello, world!");
 }
