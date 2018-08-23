@@ -9,9 +9,14 @@ extern crate exchange_runtime;
 extern crate substrate_client_db as client_db;
 extern crate substrate_state_db as state_db;
 extern crate substrate_state_machine as state_machine;
+extern crate futures;
+extern crate tokio;
+extern crate ctrlc;
 
 #[macro_use]
 extern crate hex_literal;
+#[macro_use] extern crate log;
+extern crate env_logger;
 
 use substrate_network::specialization::Specialization;
 use substrate_network::{NodeIndex, Context, message};
@@ -25,7 +30,8 @@ use std::path::PathBuf;
 use std::collections::HashMap;
 use state_machine::ExecutionStrategy;
 use exchange_executor::NativeExecutor;
-use substrate_runtime_primitives::{BuildStorage,StorageMap};
+use futures::{Future, Sink, Stream};
+use tokio::runtime::Runtime;
 
 pub struct Protocol {
   version: u64,
@@ -39,12 +45,6 @@ impl Protocol {
       version: 0,
     }
   }
-}
-
-struct DummyStorage;
-impl BuildStorage for DummyStorage {
-    fn hash(data: &[u8]) -> [u8; 16] {unimplemented!();}
-    fn build_storage(self) -> Result<StorageMap, String>{unimplemented!();}
 }
 
 impl Specialization<Block> for Protocol {
@@ -65,7 +65,7 @@ impl Specialization<Block> for Protocol {
   }
 
   fn on_abort(&mut self) {
-     unreachable!();
+     println!("on_abort!");
   }
 
   fn maintain_peers(&mut self, _ctx: &mut Context<Block>) {
@@ -173,10 +173,11 @@ impl substrate_network::TransactionPool<Hash, Block> for TransactionPool {
 fn main() {
     let backend = Arc::new(TBackend::new(client_db::DatabaseSettings{
       cache_size: None, path: PathBuf::from(r"./"), pruning:state_db::PruningMode::default(),}, FINALIZATION_WINDOW).unwrap());
-    let executor = client::LocalCallExecutor::new(backend.clone(), NativeExecutor::<Exchange_Executor>::with_heap_pages(8));
+    let executor = client::LocalCallExecutor::new(backend.clone(), NativeExecutor::with_heap_pages(8));
 
-    let client = <client::Client<TBackend, TExecutor, Block>>::new(backend, executor, DummyStorage{}, ExecutionStrategy::NativeWhenPossible).unwrap();
+    let client = <client::Client<TBackend, TExecutor, Block>>::new(backend, executor, genesis_config(), ExecutionStrategy::NativeWhenPossible).unwrap();
 
+    env_logger::init();
     let param = NetworkParam {
        config: substrate_network::ProtocolConfig::default(),
        network_config: substrate_network_libp2p::NetworkConfiguration::default(),
@@ -187,4 +188,12 @@ fn main() {
     };
     NetworkService::new(param, DOT_PROTOCOL_ID);
     println!("Hello, world!");
+
+    let mut runtime = Runtime::new().unwrap();
+    let (exit_send, exit) = futures::sync::mpsc::channel(1);
+    ctrlc::CtrlC::set_handler(move || {
+      exit_send.clone().send(()).wait().expect("Error sending exit notification");
+    });
+
+    runtime.block_on(exit.into_future()).expect("Error running informant event loop");
 }
