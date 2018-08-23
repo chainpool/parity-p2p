@@ -14,6 +14,8 @@ extern crate ctrlc;
 
 #[macro_use]
 extern crate hex_literal;
+#[macro_use] extern crate log;
+extern crate env_logger;
 
 use substrate_network::specialization::Specialization;
 use substrate_network::{NodeIndex, Context, message};
@@ -170,6 +172,7 @@ fn main() {
 //    let backend = Arc::new(Backend::new(client_db::DatabaseSettings{
 //            cache_size: None, path: PathBuf::from(r"./"), pruning:state_db::PruningMode::default(),}, FINALIZATION_WINDOW));
 //    let executor = Executor::new(backend, exchange_executor::NativeExecutor::with_heap_pages(8));
+    env_logger::init();
     let executor = exchange_executor::NativeExecutor::with_heap_pages(8);
     let client = client::new_in_mem::<exchange_executor::NativeExecutor<exchange_executor::Executor>, Block, _>(executor, genesis_config()).unwrap();
     let param = NetworkParam {
