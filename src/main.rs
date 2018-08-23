@@ -170,14 +170,16 @@ impl substrate_network::TransactionPool<Hash, Block> for TransactionPool {
   }
 }
 
+pub type Client = client::Client<TBackend, TExecutor, Block>;
+
 fn main() {
+    env_logger::init();
     let backend = Arc::new(TBackend::new(client_db::DatabaseSettings{
       cache_size: None, path: PathBuf::from(r"./"), pruning:state_db::PruningMode::default(),}, FINALIZATION_WINDOW).unwrap());
     let executor = client::LocalCallExecutor::new(backend.clone(), NativeExecutor::with_heap_pages(8));
 
-    let client = <client::Client<TBackend, TExecutor, Block>>::new(backend, executor, genesis_config(), ExecutionStrategy::NativeWhenPossible).unwrap();
+    let client = Client::new(backend, executor, genesis_config(), ExecutionStrategy::NativeWhenPossible).unwrap();
 
-    env_logger::init();
     let param = NetworkParam {
        config: substrate_network::ProtocolConfig::default(),
        network_config: substrate_network_libp2p::NetworkConfiguration::default(),
