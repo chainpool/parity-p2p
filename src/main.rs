@@ -66,7 +66,7 @@ impl Specialization<Block> for Protocol {
   }
 
   fn maintain_peers(&mut self, _ctx: &mut Context<Block>) {
-     unreachable!();
+     println!("maintain_peers!");
   }
 
   fn on_block_imported(&mut self, _ctx: &mut Context<Block>, hash: Hash, header: &Header) {
@@ -156,7 +156,8 @@ impl TransactionPool {
 
 impl substrate_network::TransactionPool<Hash, Block> for TransactionPool {
   fn transactions(&self) -> Vec<(Hash, UncheckedExtrinsic)> {
-        unreachable!();
+        println!("transactions");
+        vec![(Hash::from(2), vec![])]
   }
 
   fn import(&self, transaction: &UncheckedExtrinsic) -> Option<Hash> {
@@ -164,7 +165,7 @@ impl substrate_network::TransactionPool<Hash, Block> for TransactionPool {
   }
 
   fn on_broadcasted(&self, propagations: HashMap<Hash, Vec<String>>) {
-        unreachable!();
+        println!("on_broadcasted");
   }
 }
 
@@ -177,13 +178,13 @@ fn main() {
     let client = client::new_in_mem::<exchange_executor::NativeExecutor<exchange_executor::Executor>, Block, _>(executor, genesis_config()).unwrap();
     let param = NetworkParam {
        config: substrate_network::ProtocolConfig::default(),
-       network_config: substrate_network_libp2p::NetworkConfiguration::default(),
+       network_config: substrate_network_libp2p::NetworkConfiguration::new_local(),
        chain: Arc::new(client),
        on_demand: None,
        transaction_pool: Arc::new(TransactionPool::new()),
        specialization: Protocol::new(),
     };
-    NetworkService::new(param, DOT_PROTOCOL_ID);
+    let service = NetworkService::new(param, DOT_PROTOCOL_ID).unwrap();
     println!("Hello, world!");
 
     let mut runtime = Runtime::new().unwrap();
