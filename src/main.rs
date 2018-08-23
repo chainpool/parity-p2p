@@ -16,7 +16,9 @@ extern crate ctrlc;
 extern crate hex_literal;
 #[macro_use] extern crate log;
 extern crate env_logger;
+extern crate clap;
 
+use substrate_network_libp2p::AddrComponent;
 use substrate_network::specialization::Specialization;
 use substrate_network::{NodeIndex, Context, message};
 use substrate_network::StatusMessage as GenericFullStatus;
@@ -29,6 +31,9 @@ use std::path::PathBuf;
 use std::collections::HashMap;
 use futures::{Future, Sink, Stream};
 use tokio::runtime::Runtime;
+use clap::{Arg, App};
+use std::iter;
+use std::net::Ipv4Addr;
 
 pub struct Protocol {
   version: u64,
@@ -46,19 +51,20 @@ impl Protocol {
 
 impl Specialization<Block> for Protocol {
   fn status(&self) -> Vec<u8> {
-     unreachable!();
+     println!("status");
+     vec![2, 2]
   }
 
   fn on_connect(&mut self, ctx: &mut Context<Block>, who: NodeIndex, status: FullStatus) {
-     unreachable!();
+     println!("on_connect");
   }
 
   fn on_disconnect(&mut self, ctx: &mut Context<Block>, who: NodeIndex) {
-     unreachable!();
+     println!("on_disconnect");
   }
 
   fn on_message(&mut self, ctx: &mut Context<Block>, who: NodeIndex, message: message::Message<Block>) {
-     unreachable!();
+     println!("on_message");
   }
 
   fn on_abort(&mut self) {
@@ -77,12 +83,6 @@ impl Specialization<Block> for Protocol {
 pub type NetworkService = substrate_network::Service<Block, Protocol, Hash>;
 
 pub type NetworkParam = substrate_network::Params<Block, Protocol, Hash>;
-
-//pub type Backend = client::in_mem::Backend<Block, Hash, substrate_primitives::RlpCodec>;
-
-//pub type Executor = client::LocalCallExecutor<Backend, exchange_executor::NativeExecutor<exchange_executor::Executor>>;
-
-//pub type Client = client::Client<Backend, Executor, Block>; 
 
 const FINALIZATION_WINDOW: u64 = 32;
 
@@ -143,6 +143,7 @@ fn genesis_config() -> GenesisConfig {
         };
     genesis_config
 }
+
 pub struct TransactionPool {
 }
 
@@ -153,7 +154,6 @@ impl TransactionPool {
   }
 }
 
-
 impl substrate_network::TransactionPool<Hash, Block> for TransactionPool {
   fn transactions(&self) -> Vec<(Hash, UncheckedExtrinsic)> {
         println!("transactions");
@@ -161,7 +161,7 @@ impl substrate_network::TransactionPool<Hash, Block> for TransactionPool {
   }
 
   fn import(&self, transaction: &UncheckedExtrinsic) -> Option<Hash> {
-        unreachable!();
+       None
   }
 
   fn on_broadcasted(&self, propagations: HashMap<Hash, Vec<String>>) {
@@ -170,22 +170,44 @@ impl substrate_network::TransactionPool<Hash, Block> for TransactionPool {
 }
 
 fn main() {
-//    let backend = Arc::new(Backend::new(client_db::DatabaseSettings{
-//            cache_size: None, path: PathBuf::from(r"./"), pruning:state_db::PruningMode::default(),}, FINALIZATION_WINDOW));
-//    let executor = Executor::new(backend, exchange_executor::NativeExecutor::with_heap_pages(8));
+    let matches = App::new("parity p2p")
+                     .version("0.1.0")
+                     .arg(Arg::with_name("port")
+                           .long("port")
+                           .value_name("PORT")
+                           .help("Specify p2p protocol TCP port")
+                           .takes_value(true))
+                      .arg(Arg::with_name("bootnodes")
+                            .long("bootnodes")
+                            .value_name("URL")
+                            .help("Specify a list of bootnodes")
+                            .takes_value(true)
+                            .multiple(true))
+                       .get_matches();
+    let port = match matches.value_of("port") {
+        Some(port) => port.parse().map_err(|_| "Invalid p2p port value specified.").unwrap(),
+        None => 20222,
+    };
+
+    let mut net_conf = substrate_network_libp2p::NetworkConfiguration::new();
+    net_conf.listen_address = iter::once(AddrComponent::IP4(Ipv4Addr::new(127, 0, 0, 1)))
+            .chain(iter::once(AddrComponent::TCP(port)))
+            .collect();
+    net_conf.boot_nodes.extend(matches
+            .values_of("bootnodes")
+            .map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
     env_logger::init();
     let executor = exchange_executor::NativeExecutor::with_heap_pages(8);
     let client = client::new_in_mem::<exchange_executor::NativeExecutor<exchange_executor::Executor>, Block, _>(executor, genesis_config()).unwrap();
     let param = NetworkParam {
        config: substrate_network::ProtocolConfig::default(),
-       network_config: substrate_network_libp2p::NetworkConfiguration::new_local(),
+       network_config: net_conf,
        chain: Arc::new(client),
        on_demand: None,
        transaction_pool: Arc::new(TransactionPool::new()),
        specialization: Protocol::new(),
     };
     let service = NetworkService::new(param, DOT_PROTOCOL_ID).unwrap();
-    println!("Hello, world!");
 
     let mut runtime = Runtime::new().unwrap();
     let (exit_send, exit) = futures::sync::mpsc::channel(1);
