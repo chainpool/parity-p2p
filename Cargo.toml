@@ -11,6 +11,7 @@ substrate-primitives = { git = "https://github.com/paritytech/substrate" }
 substrate-client = { git = "https://github.com/paritytech/substrate" }
 substrate-client-db = { git = "https://github.com/paritytech/substrate" }
 substrate-state-db = { git = "https://github.com/paritytech/substrate" }
+substrate-state-machine = { git = "https://github.com/paritytech/substrate" }
 substrate-codec = { git = "https://github.com/paritytech/substrate", default_features = false }
 substrate-codec-derive = { git = "https://github.com/paritytech/substrate", default_features = false }
 serde = { version = "1.0", default_features = false }

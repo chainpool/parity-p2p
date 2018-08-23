@@ -8,6 +8,7 @@ extern crate exchange_executor;
 extern crate exchange_runtime;
 extern crate substrate_client_db as client_db;
 extern crate substrate_state_db as state_db;
+extern crate substrate_state_machine as state_machine;
 
 #[macro_use]
 extern crate hex_literal;
@@ -22,6 +23,9 @@ use exchange_runtime::{GenesisConfig,
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::collections::HashMap;
+use state_machine::ExecutionStrategy;
+use exchange_executor::NativeExecutor;
+use substrate_runtime_primitives::{BuildStorage,StorageMap};
 
 pub struct Protocol {
   version: u64,
@@ -35,6 +39,12 @@ impl Protocol {
       version: 0,
     }
   }
+}
+
+struct DummyStorage;
+impl BuildStorage for DummyStorage {
+    fn hash(data: &[u8]) -> [u8; 16] {unimplemented!();}
+    fn build_storage(self) -> Result<StorageMap, String>{unimplemented!();}
 }
 
 impl Specialization<Block> for Protocol {
@@ -71,11 +81,10 @@ pub type NetworkService = substrate_network::Service<Block, Protocol, Hash>;
 
 pub type NetworkParam = substrate_network::Params<Block, Protocol, Hash>;
 
-//pub type Backend = client::in_mem::Backend<Block, Hash, substrate_primitives::RlpCodec>;
+use exchange_executor::Executor as Exchange_Executor;
 
-//pub type Executor = client::LocalCallExecutor<Backend, exchange_executor::NativeExecutor<exchange_executor::Executor>>;
-
-//pub type Client = client::Client<Backend, Executor, Block>; 
+pub type TBackend = client_db::Backend<Block>;
+pub type TExecutor = client::LocalCallExecutor<TBackend, NativeExecutor<Exchange_Executor>>;
 
 const FINALIZATION_WINDOW: u64 = 32;
 
@@ -162,11 +171,12 @@ impl substrate_network::TransactionPool<Hash, Block> for TransactionPool {
 }
 
 fn main() {
-//    let backend = Arc::new(Backend::new(client_db::DatabaseSettings{
-//            cache_size: None, path: PathBuf::from(r"./"), pruning:state_db::PruningMode::default(),}, FINALIZATION_WINDOW));
-//    let executor = Executor::new(backend, exchange_executor::NativeExecutor::with_heap_pages(8));
-    let executor = exchange_executor::NativeExecutor::with_heap_pages(8);
-    let client = client::new_in_mem::<exchange_executor::NativeExecutor<exchange_executor::Executor>, Block, _>(executor, genesis_config()).unwrap();
+    let backend = Arc::new(TBackend::new(client_db::DatabaseSettings{
+      cache_size: None, path: PathBuf::from(r"./"), pruning:state_db::PruningMode::default(),}, FINALIZATION_WINDOW).unwrap());
+    let executor = client::LocalCallExecutor::new(backend.clone(), NativeExecutor::<Exchange_Executor>::with_heap_pages(8));
+
+    let client = <client::Client<TBackend, TExecutor, Block>>::new(backend, executor, DummyStorage{}, ExecutionStrategy::NativeWhenPossible).unwrap();
+
     let param = NetworkParam {
        config: substrate_network::ProtocolConfig::default(),
        network_config: substrate_network_libp2p::NetworkConfiguration::default(),
