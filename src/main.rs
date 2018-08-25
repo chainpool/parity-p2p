@@ -3,20 +3,22 @@ extern crate substrate_network_libp2p;
 extern crate substrate_runtime_primitives;
 extern crate substrate_primitives;
 extern crate substrate_client as client;
+extern crate substrate_bft as bft;
+
 extern crate exchange_primitives;
 extern crate exchange_executor;
 extern crate exchange_runtime;
-extern crate substrate_client_db as client_db;
-extern crate substrate_state_db as state_db;
+
 extern crate futures;
 extern crate tokio;
 extern crate ctrlc;
-
+extern crate rhododendron;
 #[macro_use]
 extern crate hex_literal;
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate clap;
+extern crate ed25519;
 
 use substrate_network_libp2p::AddrComponent;
 use substrate_network::specialization::Specialization;
@@ -34,6 +36,7 @@ use tokio::runtime::Runtime;
 use clap::{Arg, App};
 use std::iter;
 use std::net::Ipv4Addr;
+use std::thread;
 
 pub struct Protocol {
   version: u64,
@@ -89,11 +92,11 @@ const FINALIZATION_WINDOW: u64 = 32;
 const DOT_PROTOCOL_ID: substrate_network::ProtocolId = *b"exc";
 
 fn genesis_config() -> GenesisConfig {
-        let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
+        let god_key = hex!("3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124");
         let genesis_config = GenesisConfig {
                 consensus: Some(ConsensusConfig {
-                    code: vec![],   // TODO
-                    authorities: vec![god_key.clone().into()],
+                    code: include_bytes!("../runtime/wasm/target/wasm32-unknown-unknown/release/exchange_runtime.compact.wasm").to_vec(),   // TODO
+                    authorities: vec![ed25519::Pair::from_seed(&god_key).public().into(),],
                 }),
                 system: None,
                 session: Some(SessionConfig {
@@ -169,6 +172,30 @@ impl substrate_network::TransactionPool<Hash, Block> for TransactionPool {
   }
 }
 
+pub fn fake_justify(header: &Header) -> bft::UncheckedJustification<Hash> {
+    let hash = header.hash();
+    let authorities_keys = vec![
+        ed25519::Pair::from_seed(&hex!("3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124")),
+    ];
+
+    bft::UncheckedJustification::new(
+        hash,
+        authorities_keys.iter().map(|key| {
+            let msg = bft::sign_message::<Block>(
+                ::rhododendron::Vote::Commit(1, hash).into(),
+                key,
+                header.parent_hash
+            );
+
+            match msg {
+                ::rhododendron::LocalizedMessage::Vote(vote) => vote.signature,
+                _ => panic!("signing vote leads to signed vote"),
+            }
+        }).collect(),
+        1,
+    )
+}
+
 fn main() {
     let matches = App::new("parity p2p")
                      .version("0.1.0")
@@ -198,11 +225,26 @@ fn main() {
             .map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
     env_logger::init();
     let executor = exchange_executor::NativeExecutor::with_heap_pages(8);
-    let client = client::new_in_mem::<exchange_executor::NativeExecutor<exchange_executor::Executor>, Block, _>(executor, genesis_config()).unwrap();
+    let c = Arc::new(client::new_in_mem::<exchange_executor::NativeExecutor<exchange_executor::Executor>, Block, _>(executor, genesis_config()).unwrap());
+
+    let mut n = 10;
+    while n > 0 {
+        let best_header = c.best_block_header().unwrap();
+        println!("Best block: #{}", best_header.number);
+        let builder = c.new_block().unwrap();
+        let block = builder.bake().unwrap();
+        let justification = fake_justify(&block.header);
+        let justified = c.check_justification(block.header, justification).unwrap();
+        c.import_block(client::BlockOrigin::File, justified, Some(block.extrinsics)).unwrap();
+        thread::sleep_ms(5000);
+        n = n - 1;
+    }
+
+
     let param = NetworkParam {
        config: substrate_network::ProtocolConfig::default(),
        network_config: net_conf,
-       chain: Arc::new(client),
+       chain: c.clone(),
        on_demand: None,
        transaction_pool: Arc::new(TransactionPool::new()),
        specialization: Protocol::new(),
