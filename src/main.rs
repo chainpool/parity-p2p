@@ -29,6 +29,7 @@ use exchange_runtime::{GenesisConfig,
     ConsensusConfig, CouncilConfig, DemocracyConfig, SessionConfig, StakingConfig,
     TimestampConfig};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::path::PathBuf;
 use std::collections::HashMap;
 use futures::{Future, Sink, Stream};
@@ -225,37 +226,33 @@ fn main() {
             .map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
     env_logger::init();
     let executor = exchange_executor::NativeExecutor::with_heap_pages(8);
-    let c = Arc::new(client::new_in_mem::<exchange_executor::NativeExecutor<exchange_executor::Executor>, Block, _>(executor, genesis_config()).unwrap());
-
-    let mut n = 10;
-    while n > 0 {
-        let best_header = c.best_block_header().unwrap();
-        println!("Best block: #{}", best_header.number);
-        let builder = c.new_block().unwrap();
-        let block = builder.bake().unwrap();
-        let justification = fake_justify(&block.header);
-        let justified = c.check_justification(block.header, justification).unwrap();
-        c.import_block(client::BlockOrigin::File, justified, Some(block.extrinsics)).unwrap();
-        thread::sleep_ms(5000);
-        n = n - 1;
-    }
+    let client = Arc::new(client::new_in_mem::<exchange_executor::NativeExecutor<exchange_executor::Executor>, Block, _>(executor, genesis_config()).unwrap());
 
 
     let param = NetworkParam {
        config: substrate_network::ProtocolConfig::default(),
        network_config: net_conf,
-       chain: c.clone(),
+       chain: client.clone(),
        on_demand: None,
        transaction_pool: Arc::new(TransactionPool::new()),
        specialization: Protocol::new(),
     };
     let service = NetworkService::new(param, DOT_PROTOCOL_ID).unwrap();
 
-    let mut runtime = Runtime::new().unwrap();
-    let (exit_send, exit) = futures::sync::mpsc::channel(1);
-    ctrlc::CtrlC::set_handler(move || {
-      exit_send.clone().send(()).wait().expect("Error sending exit notification");
-    });
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+       r.store(false, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");
 
-    runtime.block_on(exit.into_future()).expect("Error running informant event loop");
+    while running.load(Ordering::SeqCst) {
+        let best_header = client.best_block_header().unwrap();
+        println!("Best block: #{}", best_header.number);
+        let builder = client.new_block().unwrap();
+        let block = builder.bake().unwrap();
+        let justification = fake_justify(&block.header);
+        let justified = client.check_justification(block.header, justification).unwrap();
+        client.import_block(client::BlockOrigin::File, justified, Some(block.extrinsics)).unwrap();
+        thread::sleep_ms(5000);
+    }
 }
