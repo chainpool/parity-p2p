@@ -34,7 +34,7 @@ use std::path::PathBuf;
 use std::collections::HashMap;
 use futures::{Future, Sink, Stream};
 use tokio::runtime::Runtime;
-use clap::{Arg, App};
+use clap::{Arg, App, SubCommand};
 use std::iter;
 use std::net::Ipv4Addr;
 use std::thread;
@@ -80,7 +80,7 @@ impl Specialization<Block> for Protocol {
   }
 
   fn on_block_imported(&mut self, _ctx: &mut Context<Block>, hash: Hash, header: &Header) {
-     unreachable!();
+     println!("on_block_imported!");
   }
 }
 
@@ -211,6 +211,8 @@ fn main() {
                             .help("Specify a list of bootnodes")
                             .takes_value(true)
                             .multiple(true))
+                       .subcommand(SubCommand::with_name("validator")
+                             .help("Enable validator mode"))
                        .get_matches();
     let port = match matches.value_of("port") {
         Some(port) => port.parse().map_err(|_| "Invalid p2p port value specified.").unwrap(),
@@ -237,7 +239,7 @@ fn main() {
        transaction_pool: Arc::new(TransactionPool::new()),
        specialization: Protocol::new(),
     };
-    let service = NetworkService::new(param, DOT_PROTOCOL_ID).unwrap();
+    let network = NetworkService::new(param, DOT_PROTOCOL_ID).unwrap();
 
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
@@ -248,11 +250,16 @@ fn main() {
     while running.load(Ordering::SeqCst) {
         let best_header = client.best_block_header().unwrap();
         println!("Best block: #{}", best_header.number);
-        let builder = client.new_block().unwrap();
-        let block = builder.bake().unwrap();
-        let justification = fake_justify(&block.header);
-        let justified = client.check_justification(block.header, justification).unwrap();
-        client.import_block(client::BlockOrigin::File, justified, Some(block.extrinsics)).unwrap();
+        if let Some(_) = matches.subcommand_matches("validator") {
+                let builder = client.new_block().unwrap();
+                let block = builder.bake().unwrap();
+                let block_header = block.header.clone();
+                let hash = block_header.hash();
+                let justification = fake_justify(&block.header);
+                let justified = client.check_justification(block.header, justification).unwrap();
+                client.import_block(client::BlockOrigin::NetworkBroadcast, justified, Some(block.extrinsics)).unwrap();
+                network.on_block_imported(hash, &block_header);
+        }
         thread::sleep_ms(5000);
     }
 }
