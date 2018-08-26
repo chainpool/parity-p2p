@@ -2,7 +2,7 @@
 
 - Node1 run
 ``` terminal
-RUST_LOG=debug ./target/debug/p2p
+RUST_LOG=debug ./target/debug/p2p validator >log.out 2>&1
 ```
 
 - Node2 run
